@@ -11,10 +11,12 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 	<dependencies>
+		<!-- HttpUtils 依赖 BEG -->
 		<dependency>
 			<groupId>org.apache.httpcomponents</groupId>
 			<artifactId>httpmime</artifactId>
 			<version>4.5.2</version>
 		</dependency>
+		<!-- HttpUtils 依赖 END -->
 	</dependencies>
 </project>

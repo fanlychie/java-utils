@@ -138,7 +138,7 @@ public final class HttpUtils {
 		// 代理主机
 		private String proxyHost;
 		
-		// HTTP/HTTPS
+		// 代理类型(http或https)
 		private String proxySchema;
 		
 		// 私有构造子
@@ -276,7 +276,7 @@ public final class HttpUtils {
 		 * @param port
 		 *            代理端口
 		 * @param schema
-		 *            http/https, 默认 http
+		 *            代理类型(http或https), 默认 http
 		 * 
 		 * @return {@link HttpRequest}
 		 */
