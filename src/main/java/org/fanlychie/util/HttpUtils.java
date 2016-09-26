@@ -115,7 +115,7 @@ public final class HttpUtils {
 		private RequestMethod method;
 		
 		// 失败重试的次数
-		private int retryTimes = 0;
+		private int retryTimes = 3;
 		
 		// 读取结果超时的秒数
 		private int readTimeoutSecond = 120;
@@ -244,13 +244,60 @@ public final class HttpUtils {
 		/**
 		 * 设置请求参数键值对
 		 * 
-		 * @param keyValues
+		 * @param nameValues
 		 *            请求参数键值对
 		 * 
 		 * @return {@link HttpRequest}
 		 */
-		public HttpRequest setParams(Object... keyValues) {
-			this.params = convertMap(keyValues);
+		public HttpRequest setParams(Object... nameValues) {
+			this.params = convertMap(nameValues);
+			return this;
+		}
+
+		/**
+		 * 设置请求头参数键值对
+		 * 
+		 * @param nameValues
+		 *            请求头参数键值对
+		 * 
+		 * @return {@link HttpRequest}
+		 */
+		public HttpRequest setHeader(String... nameValues) {
+			this.header = convertMap(nameValues);
+			return this;
+		}
+		
+		/**
+		 * 添加请求参数
+		 * 
+		 * @param name
+		 *            参数名
+		 * @param value
+		 *            参数值
+		 * @return
+		 */
+		public HttpRequest addParam(String name, Object value) {
+			if (this.params == null) {
+				this.params = new HashMap<>();
+			}
+			params.put(name, value.toString());
+			return this;
+		}
+		
+		/**
+		 * 添加请求头参数
+		 * 
+		 * @param name
+		 *            参数名
+		 * @param value
+		 *            参数值
+		 * @return
+		 */
+		public HttpRequest addHeader(String name, Object value) {
+			if (this.header == null) {
+				this.header = new HashMap<>();
+			}
+			header.put(name, value.toString());
 			return this;
 		}
 		
@@ -284,19 +331,6 @@ public final class HttpUtils {
 			this.proxyHost = host;
 			this.proxyPort = port;
 			this.proxySchema = schema;
-			return this;
-		}
-
-		/**
-		 * 设置请求头参数键值对
-		 * 
-		 * @param keyValues
-		 *            请求头参数键值对
-		 * 
-		 * @return {@link HttpRequest}
-		 */
-		public HttpRequest setHeader(String... keyValues) {
-			this.header = convertMap(keyValues);
 			return this;
 		}
 		
