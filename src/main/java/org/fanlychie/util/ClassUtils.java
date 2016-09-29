@@ -69,24 +69,7 @@ public final class ClassUtils {
 	/**
 	 * 修饰符
 	 */
-	public static enum Modifier {
-
-		/**
-		 * 全部修饰符
-		 */
-		WHOLE,
-
-		/**
-		 * 静态修饰符
-		 */
-		STATIC,
-
-		/**
-		 * 非静态修饰符
-		 */
-		NON_STATIC
-		
-	}
+	private static enum Modifier { WHOLE, STATIC, NON_STATIC }
 	
 	/**
 	 * 扫描加载类文件, 支持 JAR 包
@@ -112,56 +95,6 @@ public final class ClassUtils {
 			throw e;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
-		}
-	}
-	
-	/**
-	 * 获取类声明的字段列表
-	 * 
-	 * @param clazz
-	 *            类
-	 * @param modifier
-	 *            字段修饰符 {@link Modifier}
-	 * @param backtrack
-	 *            是否回溯到父类查找
-	 * @return
-	 */
-	public static List<Field> getDeclaredFields(Class<?> clazz, Modifier modifier, boolean backtrack) {
-		if (backtrack) {
-			// 链表, 当前类字段先进, 父类字段后进
-			List<Field> list = new LinkedList<>();
-			do {
-				list.addAll(loadDeclaredFields(clazz, modifier));
-			} while ((clazz = clazz.getSuperclass()) != null);
-			return list;
-		}
-		else {
-			return loadDeclaredFields(clazz, modifier);
-		}
-	}
-	
-	/**
-	 * 获取类声明的方法列表
-	 * 
-	 * @param clazz
-	 *            类
-	 * @param modifier
-	 *            方法修饰符 {@link Modifier}
-	 * @param backtrack
-	 *            是否回溯到父类查找
-	 * @return
-	 */
-	public static List<Method> getDeclaredMethods(Class<?> clazz, Modifier modifier, boolean backtrack) {
-		if (backtrack) {
-			// 链表, 当前类方法先进, 父类方法后进
-			List<Method> list = new LinkedList<>();
-			do {
-				list.addAll(loadDeclaredMethods(clazz, modifier));
-			} while ((clazz = clazz.getSuperclass()) != null);
-			return list;
-		}
-		else {
-			return loadDeclaredMethods(clazz, modifier);
 		}
 	}
 	
@@ -236,45 +169,6 @@ public final class ClassUtils {
 	}
 	
 	/**
-	 * 设置字段的值
-	 * 
-	 * @param obj
-	 *            对于实例变量(非静态字段), 此为实例对象; 对于类变量(静态字段), 此可为类对象(Class对象)
-	 * @param field
-	 *            字段
-	 * @param value
-	 *            字段的值
-	 */
-	public static void setFieldValue(Object obj, Field field, Object value) {
-		try {
-			field.set(obj, value);
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	/**
-	 * 获取字段的值
-	 * 
-	 * @param obj
-	 *            对于实例变量(非静态字段), 此为实例对象; 对于类变量(静态字段), 此可为类对象(Class对象)
-	 * @param field
-	 *            字段
-	 * @return
-	 */
-	public static <T> T getFieldValue(Object obj, Field field) {
-		try {
-			return (T) field.get(obj);
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Throwable e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	/**
 	 * 设置字段的值.
 	 * 
 	 * 若此次操作的类(Class)不在内置的CLASS_METADATA_MAP内存缓存中, 则将其载入CLASS_METADATA_MAP缓存;
@@ -289,7 +183,7 @@ public final class ClassUtils {
 	 *            字段的值
 	 * @param value
 	 */
-	public static void setFieldValueQuickly(Object obj, String field, Object value) {
+	public static void setFieldValue(Object obj, String field, Object value) {
 		Class<?> clazz = null;
 		if (obj instanceof Class) {
 			clazz = (Class<?>) obj;
@@ -313,7 +207,7 @@ public final class ClassUtils {
 	 *            字段
 	 * @return
 	 */
-	public static <T> T getFieldValueQuickly(Object obj, String field) {
+	public static <T> T getFieldValue(Object obj, String field) {
 		Class<?> clazz = null;
 		if (obj instanceof Class) {
 			clazz = (Class<?>) obj;
@@ -337,29 +231,8 @@ public final class ClassUtils {
 	 *            字段
 	 * @return
 	 */
-	public static Class<?> getFieldTypeQuickly(Class<?> clazz, String field) {
+	public static Class<?> getFieldType(Class<?> clazz, String field) {
 		return getFieldFromCache(clazz, field).getType();
-	}
-	
-	/**
-	 * 调用方法
-	 * 
-	 * @param obj
-	 *            对于实例方法(非静态方法), 此为实例对象; 对于类方法(静态方法), 此可为类对象(Class对象)
-	 * @param method
-	 *            方法
-	 * @param values
-	 *            方法的参数值列表
-	 * @return
-	 */
-	public static <T> T invokeMethod(Object obj, Method method, Object[] values) {
-		try {
-			return (T) method.invoke(obj, values);
-		} catch (RuntimeException e) {
-			throw e;
-		} catch (Throwable e) {
-			throw new RuntimeException(e);
-		}
 	}
 	
 	/**
@@ -381,8 +254,8 @@ public final class ClassUtils {
 	 *            方法的参数值列表
 	 * @return
 	 */
-	public static <T> T invokeMethodQuickly(Object obj, String method, Object[] argValues) {
-		return invokeMethodQuickly(obj, method, argValues, null);
+	public static <T> T invokeMethod(Object obj, String method, Object[] argValues) {
+		return invokeMethod(obj, method, argValues, null);
 	}
 	
 	/**
@@ -402,7 +275,7 @@ public final class ClassUtils {
 	 *            方法的参数的类型列表
 	 * @return
 	 */
-	public static <T> T invokeMethodQuickly(Object obj, String method, Object[] argValues, Class<?>[] argTypes) {
+	public static <T> T invokeMethod(Object obj, String method, Object[] argValues, Class<?>[] argTypes) {
 		Class<?> clazz = null;
 		if (obj instanceof Class) {
 			clazz = (Class<?>) obj;
@@ -529,6 +402,116 @@ public final class ClassUtils {
 			list.add(convert(src, destClass));
 		}
 		return list;
+	}
+	
+	/**
+	 * 获取类声明的字段列表
+	 * 
+	 * @param clazz
+	 *            类
+	 * @param modifier
+	 *            字段修饰符 {@link Modifier}
+	 * @param backtrack
+	 *            是否回溯到父类查找
+	 * @return
+	 */
+	private static List<Field> getDeclaredFields(Class<?> clazz, Modifier modifier, boolean backtrack) {
+		if (backtrack) {
+			// 链表, 当前类字段先进, 父类字段后进
+			List<Field> list = new LinkedList<>();
+			do {
+				list.addAll(loadDeclaredFields(clazz, modifier));
+			} while ((clazz = clazz.getSuperclass()) != null);
+			return list;
+		}
+		else {
+			return loadDeclaredFields(clazz, modifier);
+		}
+	}
+	
+	/**
+	 * 获取类声明的方法列表
+	 * 
+	 * @param clazz
+	 *            类
+	 * @param modifier
+	 *            方法修饰符 {@link Modifier}
+	 * @param backtrack
+	 *            是否回溯到父类查找
+	 * @return
+	 */
+	private static List<Method> getDeclaredMethods(Class<?> clazz, Modifier modifier, boolean backtrack) {
+		if (backtrack) {
+			// 链表, 当前类方法先进, 父类方法后进
+			List<Method> list = new LinkedList<>();
+			do {
+				list.addAll(loadDeclaredMethods(clazz, modifier));
+			} while ((clazz = clazz.getSuperclass()) != null);
+			return list;
+		}
+		else {
+			return loadDeclaredMethods(clazz, modifier);
+		}
+	}
+	
+	/**
+	 * 设置字段的值
+	 * 
+	 * @param obj
+	 *            对于实例变量(非静态字段), 此为实例对象; 对于类变量(静态字段), 此可为类对象(Class对象)
+	 * @param field
+	 *            字段
+	 * @param value
+	 *            字段的值
+	 */
+	private static void setFieldValue(Object obj, Field field, Object value) {
+		try {
+			field.set(obj, value);
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	/**
+	 * 获取字段的值
+	 * 
+	 * @param obj
+	 *            对于实例变量(非静态字段), 此为实例对象; 对于类变量(静态字段), 此可为类对象(Class对象)
+	 * @param field
+	 *            字段
+	 * @return
+	 */
+	private static <T> T getFieldValue(Object obj, Field field) {
+		try {
+			return (T) field.get(obj);
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Throwable e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	/**
+	 * 调用方法
+	 * 
+	 * @param obj
+	 *            对于实例方法(非静态方法), 此为实例对象; 对于类方法(静态方法), 此可为类对象(Class对象)
+	 * @param method
+	 *            方法
+	 * @param values
+	 *            方法的参数值列表
+	 * @return
+	 */
+	private static <T> T invokeMethod(Object obj, Method method, Object[] values) {
+		try {
+			return (T) method.invoke(obj, values);
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Throwable e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 	/**
