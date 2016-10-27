@@ -276,7 +276,7 @@ public final class FileUtils {
 		public String read() {
 			StringBuilder builder = new StringBuilder();
 			readlines((line) -> builder.append(line).append("\n"));
-			return builder.length() > 0 ? builder.toString().substring(0, builder.length() - 2) : "";
+			return builder.length() > 0 ? builder.toString().substring(0, builder.length() - 1) : "";
 		}
 		
 	}
