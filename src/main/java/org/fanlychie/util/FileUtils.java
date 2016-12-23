@@ -1,5 +1,6 @@
 package org.fanlychie.util;
 
+import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -217,6 +218,23 @@ public final class FileUtils {
 					writer.flush();
 					reader.close();
 				}
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		/**
+		 * 写出到客户端以供客户端下载此文件, 兼容中文字符
+		 *
+		 * @param response HttpServletResponse
+		 * @param filename 客户端下载文件的名称
+		 */
+		public void to(HttpServletResponse response, String filename) {
+			try (OutputStream out = response.getOutputStream()) {
+				filename = new String(filename.getBytes("UTF-8"), "ISO-8859-1");
+				response.setContentType("application/octet-stream; charset=iso-8859-1");
+				response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+				this.to(out);
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
