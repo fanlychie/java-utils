@@ -202,7 +202,8 @@ public final class ZipUtils {
         } catch (ZipException e) {
             throw new RuntimeException("解压缩密码不正确", e);
         }
-        File dest = new File(destPathname + "/" + src.getName().replace(".zip", ""));
+        String srcName = src.getName();
+        File dest = new File(destPathname + "/" + srcName.substring(0, srcName.lastIndexOf(".")));
         dest.mkdirs();
         try {
             zipFile.extractAll(dest.getAbsolutePath());
