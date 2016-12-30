@@ -1,20 +1,7 @@
 package org.fanlychie.util;
 
 import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.StringReader;
-import java.io.Writer;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -125,8 +112,59 @@ public final class FileUtils {
         return new UrlStream(url);
     }
 
-    public static Base64Image base64ImageDecode(String base64EncodeStr) {
-        return new Base64Image(base64EncodeStr);
+    /**
+     * 解码 Base64 编码的图片文件字符串
+     *
+     * @param base64EncodeStr 图片文件被 Base64 编码后的字符串内容
+     * @return 返回一个 Base64 图片文件解码器对象
+     */
+    public static Base64ImageFileDecoder base64ImageFileDecode(String base64EncodeStr) {
+        return new Base64ImageFileDecoder(base64EncodeStr);
+    }
+
+    /**
+     * Base64 编码 URL 链接的图片文件
+     *
+     * @param url 图片文件 URL 链接
+     * @return 返回一个 Base64 图片文件编码器对象
+     */
+    public static Base64ImageFileEncoder base64ImageFileEncoder(String url) {
+        String type = url.substring(url.lastIndexOf(".") + 1);
+        if (type.length() > 3) {
+            type = null;
+        }
+        HttpURLConnection conn = UrlStream.createHttpURLConnection(url);
+        try {
+            return new Base64ImageFileEncoder(conn.getInputStream()).setType(type);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Base64 编码图片文件
+     *
+     * @param src 源文件
+     * @return 返回一个 Base64 图片文件编码器对象
+     */
+    public static Base64ImageFileEncoder base64ImageFileEncoder(File src) {
+        String filename = src.getName();
+        String type = filename.substring(filename.lastIndexOf(".") + 1);
+        try {
+            return new Base64ImageFileEncoder(new FileInputStream(src)).setType(type);
+        } catch (FileNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Base64 编码输入流中的图片资源
+     *
+     * @param in 输入流
+     * @return 返回一个 Base64 图片文件编码器对象
+     */
+    public static Base64ImageFileEncoder base64ImageFileEncoder(InputStream in) {
+        return new Base64ImageFileEncoder(in);
     }
 
     /**
@@ -375,18 +413,27 @@ public final class FileUtils {
     }
 
     /**
-     * Base64 图片
+     * Base64 图片文件解码器
      */
-    public static final class Base64Image {
+    public static final class Base64ImageFileDecoder {
 
+        // 文件名
         private String fileName;
 
+        // 图片文件被 Base64 编码后的字符串
         private String base64EncodeStr;
 
-        private Base64Image(String base64EncodeStr) {
+        // 私有化
+        private Base64ImageFileDecoder(String base64EncodeStr) {
             this.base64EncodeStr = base64EncodeStr;
         }
 
+        /**
+         * 解码到文件夹
+         *
+         * @param folder 存放图片的文件夹对象
+         * @return 返回解码后的图片文件对象
+         */
         public File to(File folder) {
             Pattern pattern = Pattern.compile("(data:image/\\w+;base64,)(\\S+)");
             Matcher matcher = pattern.matcher(base64EncodeStr);
@@ -426,43 +473,68 @@ public final class FileUtils {
             return dest;
         }
 
-        public void setFileName(String fileName) {
+        /**
+         * 设置图片文件存储的文件名
+         *
+         * @param fileName 文件名, eg: demo.jpg
+         */
+        public Base64ImageFileDecoder setFileName(String fileName) {
             this.fileName = fileName;
+            return this;
         }
 
-        private static String encode(String url) {
-            String type = url.substring(url.lastIndexOf(".") + 1);
-            if (type.length() > 3) {
-                type = null;
-            }
-            HttpURLConnection conn = UrlStream.createHttpURLConnection(url);
+    }
+
+    /**
+     * Base64 图片文件编码器
+     */
+    public static final class Base64ImageFileEncoder {
+
+        // 图片文件类型
+        private String type;
+
+        // 输入流
+        private InputStream in;
+
+        // 完成时自动关闭流
+        private boolean autoCloseStream = true;
+
+        // 私有化
+        private Base64ImageFileEncoder(InputStream in) {
+            this.in = in;
+        }
+
+        /**
+         * 设置文件类型
+         *
+         * @param type 文件类型, eg: jpg
+         */
+        public Base64ImageFileEncoder setType(String type) {
+            this.type = type;
+            return this;
+        }
+
+        /**
+         * 设置完成时是否自动关闭流, 默认自动关闭
+         *
+         * @param autoCloseStream true/false
+         */
+        public Base64ImageFileEncoder setAutoCloseStream(boolean autoCloseStream) {
+            this.autoCloseStream = autoCloseStream;
+            return this;
+        }
+
+        @Override
+        public String toString() {
             try {
-                try (InputStream in = conn.getInputStream()) {
-                    return encode(in, type);
+                int read, index = 0;
+                byte[] buffer = new byte[2 * 1024 * 1024];
+                while ((read = in.read(BUFFERB)) != -1) {
+                    System.arraycopy(BUFFERB, 0, buffer, index, read);
+                    index += read;
                 }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private static String encode(File src) {
-            try {
-                try (InputStream in = new FileInputStream(src)) {
-                    String filename = src.getName();
-                    String type = filename.substring(filename.lastIndexOf(".") + 1);
-                    return encode(in, type);
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        private static String encode(InputStream in, String type) {
-            try {
-                System.out.println("in.available(): " + in.available());
-                byte[] data = new byte[in.available()];
-                int read = in.read(data);
-                System.out.println("read: " + read);
+                byte[] data = new byte[index];
+                System.arraycopy(buffer, 0, data, 0, index);
                 String content = new String(base64Encode(data));
                 if (type == null || type.equalsIgnoreCase("jpg")) {
                     type = "jpeg";
@@ -473,6 +545,14 @@ public final class FileUtils {
                 return content;
             } catch (IOException e) {
                 throw new RuntimeException(e);
+            } finally {
+                if (autoCloseStream && in != null) {
+                    try {
+                        in.close();
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
             }
         }
 
@@ -510,11 +590,6 @@ public final class FileUtils {
      */
     private static byte[] base64Decode(String src) {
         return base64Decode(src.getBytes(Charset.forName("ISO-8859-1")));
-    }
-
-    public static void main(String[] args) {
-//        System.out.println(Base64Image.encode("http://www.wufafuwu.com/uploads/150129/160216/1-160216213120L3-lp.jpg"));
-        FileUtils.base64ImageDecode("data:image/jpeg;base64,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").to(new File("C:\\data"));
     }
 
 }
