@@ -224,6 +224,16 @@ public final class FileUtils {
     }
 
     /**
+     * 输出到 HttpServletResponse
+     *
+     * @param response HttpServletResponse
+     * @return 返回一个本地文件访问器
+     */
+    public static LocalFileAccessor outputResponse(HttpServletResponse response) {
+        return new LocalFileAccessor(response);
+    }
+
+    /**
      * 可写的流
      *
      * @author fanlychie
@@ -794,6 +804,144 @@ public final class FileUtils {
     }
 
     /**
+     * 本地文件访问器
+     */
+    public static final class LocalFileAccessor {
+
+        // HttpServletResponse
+        private HttpServletResponse response;
+
+        // 输出的 contentType
+        private String contentType;
+
+        // 私有化
+        private LocalFileAccessor(HttpServletResponse response) {
+            this.response = response;
+        }
+
+        /**
+         * 设置 contentType
+         *
+         * @param contentType Content-Type
+         * @return
+         */
+        public LocalFileAccessor setContentType(String contentType) {
+            this.contentType = contentType;
+            return this;
+        }
+
+        /**
+         * 访问本地文件
+         *
+         * @param fileKey 本地文件上传返回的文件 Key
+         */
+        public void access(String fileKey) {
+            access(LocalFileUpload.achieveLocalFile(fileKey));
+        }
+
+        /**
+         * 访问本地文件
+         *
+         * @param file 本地文件对象
+         */
+        public void access(File file) {
+            if (file == null) {
+                throw new RuntimeException("找不到文件: " + file);
+            }
+            if (contentType == null) {
+                contentType = lookupMime(substringLastSeparator(file.getName(), "."));
+            }
+            response.setContentType(contentType);
+            try (OutputStream out = response.getOutputStream()) {
+                new WritableStream(new FileInputStream(file), true).to(out);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // 查找 MIME 类型
+        private String lookupMime(String extension) {
+            switch (extension) {
+                case "doc":
+                    return "application/msword";
+                case "docx":
+                    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                case "rtf":
+                    return "application/rtf";
+                case "xls":
+                    return "application/vnd.ms-excel";
+                case "xlsx":
+                    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                case "ppt":
+                    return "application/vnd.ms-powerpoint";
+                case "pptx":
+                    return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                case "pdf":
+                    return "application/pdf";
+                case "swf":
+                    return "application/x-shockwave-flash";
+                case "dll":
+                    return "application/x-msdownload";
+                case "exe":
+                case "msi":
+                case "chm":
+                case "rar":
+                    return "application/octet-stream";
+                case "tar":
+                    return "application/x-tar";
+                case "zip":
+                    return "application/x-zip-compressed";
+                case "z":
+                case "tgz":
+                    return "application/x-compressed";
+                case "wav":
+                    return "audio/wav";
+                case "wma":
+                    return "audio/x-ms-wma";
+                case "wmv":
+                    return "video/x-ms-wmv";
+                case "mp2":
+                case "mp3":
+                case "mpe":
+                case "mpg":
+                case "mpeg":
+                    return "audio/mpeg";
+                case "bmp":
+                    return "image/bmp";
+                case "gif":
+                    return "image/gif";
+                case "png":
+                    return "image/png";
+                case "tif":
+                case "tiff":
+                    return "image/tiff";
+                case "jpe":
+                case "jpg":
+                case "jpeg":
+                    return "image/jpeg";
+                case "ico":
+                    return "image/x-icon";
+                case "txt":
+                    return "text/plain";
+                case "xml":
+                    return "text/xml";
+                case "html":
+                    return "text/html";
+                case "css":
+                    return "text/css";
+                case "js":
+                    return "text/javascript";
+                case "mht":
+                case "mhtml":
+                    return "message/rfc822";
+                default:
+                    return "";
+            }
+        }
+
+    }
+
+    /**
      * 本地文件上传基类
      */
     private static abstract class AbstractLocalFileUpload {
@@ -845,7 +993,7 @@ public final class FileUtils {
 
         // 执行文件上传
         protected void excuteFileUpload(FileUploadReport report, Object target, String fileName, long fileSize, Consumer<File> consumer) {
-            String extension = substringLastSeparator(fileName, ".").toLowerCase();
+            String extension = substringLastSeparator(fileName, ".");
             if (filters == null || (filters != null && filters.contains(extension))) {
                 String overSizeLimit = null;
                 if (minSize != 0 && fileSize < minSize) {
@@ -953,6 +1101,23 @@ public final class FileUtils {
                 childFoloder.mkdirs();
             }
             return new LocalFile(uuidStr, new File(childFoloder, fileName));
+        }
+
+        /**
+         * 获取本地文件
+         *
+         * @param fileKey 文件上传返回的文件 Key
+         * @return 返回找到的文件对象
+         */
+        private static File achieveLocalFile(String fileKey) {
+            String childFolderName = fileKey.substring(0, childFolderLength);
+            File childFoloder = new File(storageRootFolder + "/" + childFolderName);
+            for (File file : childFoloder.listFiles()) {
+                if (file.getName().startsWith(fileKey)) {
+                    return file;
+                }
+            }
+            return null;
         }
 
     }
@@ -1072,7 +1237,7 @@ public final class FileUtils {
         if (index == -1) {
             return "";
         }
-        return source.substring(index + 1);
+        return source.substring(index + 1).toLowerCase();
     }
 
     /**
