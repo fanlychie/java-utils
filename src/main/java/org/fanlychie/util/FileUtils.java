@@ -1,7 +1,12 @@
 package org.fanlychie.util;
 
+import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload.FileUploadException;
+import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -192,7 +197,7 @@ public final class FileUtils {
      * SpringMVC 文件上传
      *
      * @param file 文件对象
-     * @return 返回一个SpringMVC 文件上传对象
+     * @return 返回一个 SpringMVC 文件上传对象
      */
     public static SpringMVCFileUpload upload(MultipartFile file) {
         return new SpringMVCFileUpload(new MultipartFile[]{file});
@@ -202,10 +207,20 @@ public final class FileUtils {
      * SpringMVC 文件上传
      *
      * @param files 文件对象数组
-     * @return 返回一个SpringMVC 文件上传对象
+     * @return 返回一个 SpringMVC 文件上传对象
      */
     public static SpringMVCFileUpload upload(MultipartFile[] files) {
         return new SpringMVCFileUpload(files);
+    }
+
+    /**
+     * HttpServletRequest 文件上传
+     *
+     * @param request HttpServletRequest 对象
+     * @return 返回一个 HttpServletRequest 文件上传对象
+     */
+    public static HttpServletRequestFileUpload upload(HttpServletRequest request) {
+        return new HttpServletRequestFileUpload(request);
     }
 
     /**
@@ -602,31 +617,10 @@ public final class FileUtils {
     /**
      * SpringMVC 文件上传
      */
-    public static final class SpringMVCFileUpload {
+    public static final class SpringMVCFileUpload extends AbstractLocalFileUpload {
 
         // SpringMVC 文件对象数组
         private MultipartFile[] files;
-
-        // 允许文件上传的最小大小
-        private long minSize;
-
-        // 允许文件上传的最大大小
-        private long maxSize;
-
-        // 允许文件上传的类型
-        private List<String> filters;
-
-        // 文件大小限制提示信息
-        private String limitTips;
-
-        // 文件类型限制提示信息
-        private String filterTips;
-
-        // 文件类型适配功能
-        private BiFunction<InputStream, File, Boolean> typeAdapter;
-
-        // 文件大小适配功能
-        private BiFunction<InputStream, File, Boolean> sizeAdapter;
 
         // 私有化
         private SpringMVCFileUpload(MultipartFile[] files) {
@@ -640,19 +634,8 @@ public final class FileUtils {
          * @param maxSize 最大大小, 单位(B), 默认为0, 表示不限制
          * @return
          */
-        public SpringMVCFileUpload limit(long minSize, long maxSize) {
-            this.minSize = minSize;
-            this.maxSize = maxSize;
-            this.limitTips = "请上传 ";
-            if (maxSize != 0 && minSize == 0) {
-                minSize = 1;
-            }
-            if (minSize != 0 && maxSize != 0) {
-                this.limitTips += transformFileUnit(minSize);
-                this.limitTips += " ~ ";
-                this.limitTips += transformFileUnit(maxSize);
-                this.limitTips += " 的文件";
-            }
+        public SpringMVCFileUpload setLimit(long minSize, long maxSize) {
+            this.limit(minSize, maxSize);
             return this;
         }
 
@@ -662,10 +645,8 @@ public final class FileUtils {
          * @param extension 文件扩展名, 默认为空, 表示不限制, eg: "jpg", "png", 表示只允许 jpg 和 png 类型的文件上传
          * @return
          */
-        public SpringMVCFileUpload filter(String... extension) {
-            this.filters = Arrays.asList(extension);
-            this.filterTips = Arrays.toString(extension);
-            this.filterTips = filterTips.substring(1, filterTips.length() - 1);
+        public SpringMVCFileUpload setFilters(String... extension) {
+            this.filter(extension);
             return this;
         }
 
@@ -703,55 +684,217 @@ public final class FileUtils {
          */
         public FileUploadReport execute() {
             FileUploadReport report = new FileUploadReport();
-            Arrays.stream(files).filter(f -> f != null && !f.isEmpty()).forEach(file -> {
-                String fileName = file.getOriginalFilename();
-                String extension = substringLastSeparator(fileName, ".");
-                if (filters == null || (filters != null && filters.contains(extension))) {
-                    long fileSize = file.getSize();
-                    String overLimit = null;
-                    if (minSize != 0 && fileSize < minSize) {
-                        overLimit = "太小";
-                    } else if (maxSize != 0 && fileSize > maxSize) {
-                        overLimit = "太大";
-                    }
-                    if (overLimit != null) {
-                        if (sizeAdapter != null) {
-                            adaptFile(report, file, fileName, extension, sizeAdapter);
-                        } else {
-                            report.addFailItem("文件 \"" + fileName + "\" " + overLimit + ", 不符合上传标准, " + limitTips);
-                        }
-                        return;
-                    }
-                    LocalFile localFile = LocalFileUpload.createLocalFile(extension);
+            Arrays.stream(files).filter(file -> file != null && !file.isEmpty()).forEach(file -> {
+                excuteFileUpload(report, file, file.getOriginalFilename(), file.getSize(), destFile -> {
                     try {
-                        file.transferTo(localFile.file);
-                        report.addSuccessItem(localFile.key);
+                        file.transferTo(destFile);
                     } catch (IOException e) {
-                        e.printStackTrace();
-                        report.addFailItem("文件 \"" + fileName + "\" " + overLimit + ", 上传失败, 请重新选择上传");
+                        throw new RuntimeException(e);
                     }
-                } else {
-                    if (typeAdapter != null) {
-                        adaptFile(report, file, fileName, extension, typeAdapter);
-                    } else {
-                        report.addFailItem("文件 \"" + fileName + "\" 是不支持上传的类型, 请选择 " + filterTips + " 类型的文件");
-                    }
-                }
+                });
             });
             return report;
         }
 
+    }
+
+    /**
+     * HttpServletRequest 文件上传
+     */
+    public static final class HttpServletRequestFileUpload extends AbstractLocalFileUpload {
+
+        // HttpServletRequest
+        private HttpServletRequest request;
+
+        // 私有化
+        private HttpServletRequestFileUpload(HttpServletRequest request) {
+            this.request = request;
+        }
+
+        /**
+         * 设置文件上传的大小限制
+         *
+         * @param minSize 最小大小, 单位(B), 默认为0, 表示不限制
+         * @param maxSize 最大大小, 单位(B), 默认为0, 表示不限制
+         * @return
+         */
+        public HttpServletRequestFileUpload setLimit(long minSize, long maxSize) {
+            this.limit(minSize, maxSize);
+            return this;
+        }
+
+        /**
+         * 设置文件上传的允许的类型
+         *
+         * @param extension 文件扩展名, 默认为空, 表示不限制, eg: "jpg", "png", 表示只允许 jpg 和 png 类型的文件上传
+         * @return
+         */
+        public HttpServletRequestFileUpload setFilters(String... extension) {
+            this.filter(extension);
+            return this;
+        }
+
+        /**
+         * 设置文件类型适配功能
+         *
+         * @param typeAdapter 文件类型适配功能, 当上传的文件类型不符合时, 可通过此适配器转换并手工完成上传,
+         *                    参数：(InputStream, File), File 为未存储的文件对象, 文件名不可修改, 否则
+         *                    上传后工具类找不到文件位置, 可以通过 renameTo 来修改文件扩展名, 以完成文件
+         *                    类型转换。转换成功时需返回true, 失败返回false.
+         * @return
+         */
+        public HttpServletRequestFileUpload setTypeAdapter(BiFunction<InputStream, File, Boolean> typeAdapter) {
+            this.typeAdapter = typeAdapter;
+            return this;
+        }
+
+        /**
+         * 设置文件大小适配功能
+         *
+         * @param sizeAdapter 文件大小适配功能, 当上传的文件大小不符合时, 可通过此适配器转换并手工完成上传,
+         *                    参数：(InputStream, File), File 为未存储的文件对象, 文件名不可修改, 否则
+         *                    上传后工具类找不到文件位置。转换成功时需返回true, 失败返回false.
+         * @return
+         */
+        public HttpServletRequestFileUpload setSizeAdapter(BiFunction<InputStream, File, Boolean> sizeAdapter) {
+            this.sizeAdapter = sizeAdapter;
+            return this;
+        }
+
+        /**
+         * 执行文件上传
+         *
+         * @return 返回一个文件上传的报告对象
+         */
+        public FileUploadReport execute() {
+            FileUploadReport report = new FileUploadReport();
+            if (!ServletFileUpload.isMultipartContent(request)) {
+                report.addFailItem("不支持文件上传的表单域");
+            } else {
+                ServletFileUpload fileupload = new ServletFileUpload(new DiskFileItemFactory());
+                fileupload.setHeaderEncoding("UTF-8");
+                try {
+                    fileupload.parseRequest(request).stream().filter(fileItem -> !fileItem.isFormField()).forEach(fileItem -> {
+                        excuteFileUpload(report, fileItem, fileItem.getName(), fileItem.getSize(), file -> {
+                            try {
+                                fileItem.write(file);
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
+                            }
+                        });
+                    });
+                } catch (FileUploadException e) {
+                    e.printStackTrace();
+                    report.addFailItem("文件上传失败, 请重新上传");
+                }
+            }
+            return report;
+        }
+
+    }
+
+    /**
+     * 本地文件上传基类
+     */
+    private static abstract class AbstractLocalFileUpload {
+
+        // 允许文件上传的最小大小
+        protected long minSize;
+
+        // 允许文件上传的最大大小
+        protected long maxSize;
+
+        // 允许文件上传的类型
+        protected List<String> filters;
+
+        // 文件大小限制提示信息
+        protected String limitTips;
+
+        // 文件类型限制提示信息
+        protected String filterTips;
+
+        // 文件类型适配功能
+        protected BiFunction<InputStream, File, Boolean> typeAdapter;
+
+        // 文件大小适配功能
+        protected BiFunction<InputStream, File, Boolean> sizeAdapter;
+
+        // 限制上传的文件大小
+        protected void limit(long minSize, long maxSize) {
+            this.minSize = minSize;
+            this.maxSize = maxSize;
+            this.limitTips = "请上传 ";
+            if (maxSize != 0 && minSize == 0) {
+                minSize = 1;
+            }
+            if (minSize != 0 && maxSize != 0) {
+                this.limitTips += transformFileUnit(minSize);
+                this.limitTips += " ~ ";
+                this.limitTips += transformFileUnit(maxSize);
+                this.limitTips += " 的文件";
+            }
+        }
+
+        // 限制上传的文件类型
+        protected void filter(String... extension) {
+            this.filters = new ArrayList<>();
+            Arrays.stream(extension).forEach(item -> filters.add(item.toLowerCase()));
+            this.filterTips = Arrays.toString(filters.toArray());
+            this.filterTips = filterTips.substring(1, filterTips.length() - 1);
+        }
+
+        // 执行文件上传
+        protected void excuteFileUpload(FileUploadReport report, Object target, String fileName, long fileSize, Consumer<File> consumer) {
+            String extension = substringLastSeparator(fileName, ".").toLowerCase();
+            if (filters == null || (filters != null && filters.contains(extension))) {
+                String overSizeLimit = null;
+                if (minSize != 0 && fileSize < minSize) {
+                    overSizeLimit = "太小";
+                } else if (maxSize != 0 && fileSize > maxSize) {
+                    overSizeLimit = "太大";
+                }
+                if (overSizeLimit != null) {
+                    if (sizeAdapter != null) {
+                        adaptFile(report, target, fileName, extension, sizeAdapter);
+                    } else {
+                        report.addFailItem("文件 \"" + fileName + "\" " + overSizeLimit + ", 不符合上传标准, " + limitTips);
+                    }
+                } else {
+                    LocalFile localFile = LocalFileUpload.createLocalFile(extension);
+                    try {
+                        consumer.accept(localFile.file);
+                        report.addSuccessItem(localFile.key);
+                    } catch (Throwable e) {
+                        e.printStackTrace();
+                        report.addFailItem("文件 \"" + fileName + "\" " + overSizeLimit + ", 上传失败, 请重新选择上传");
+                    }
+                }
+            } else {
+                if (typeAdapter != null) {
+                    adaptFile(report, target, fileName, extension, typeAdapter);
+                } else {
+                    report.addFailItem("文件 \"" + fileName + "\" 是不支持上传的类型, 请选择 " + filterTips + " 类型的文件");
+                }
+            }
+        }
+
         // 适配文件
-        private void adaptFile(FileUploadReport report, MultipartFile file, String fileName, String extension, BiFunction<InputStream, File, Boolean> adapter) {
+        private void adaptFile(FileUploadReport report, Object target, String fileName, String extension, BiFunction<InputStream, File, Boolean> adapter) {
             LocalFile localFile = LocalFileUpload.createLocalFile(extension);
             try {
-                Boolean adapterResult = adapter.apply(file.getInputStream(), localFile.file);
+                InputStream in = null;
+                if (target instanceof FileItem) {
+                    in = ((FileItem) target).getInputStream();
+                } else if (target instanceof MultipartFile) {
+                    in = ((MultipartFile) target).getInputStream();
+                }
+                Boolean adapterResult = adapter.apply(in, localFile.file);
                 if (adapterResult != null && adapterResult) {
                     report.addSuccessItem(localFile.key);
                 } else {
                     report.addFailItem("文件 \"" + fileName + "\" 上传失败, 请重新选择上传");
                 }
-            } catch (IOException e) {
+            } catch (Throwable e) {
                 e.printStackTrace();
                 report.addFailItem("文件 \"" + fileName + "\" 上传失败, 请重新选择上传");
             }
