@@ -1,12 +1,14 @@
 package org.fanlychie.util;
 
+import org.springframework.web.multipart.MultipartFile;
+
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.util.Base64;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,9 +20,14 @@ import java.util.regex.Pattern;
  */
 public final class FileUtils {
 
+    // 缓存数组大小
     private static final byte[] BUFFERB = new byte[1024 * 1024];
 
+    // 缓存数组大小
     private static final char[] BUFFERC = new char[1024 * 1024];
+
+    // 文件大小单位
+    private static final String[] FILE_SIZE_UNIT = {"B", "KB", "M", "G"};
 
     /**
      * 写出文件
@@ -129,7 +136,7 @@ public final class FileUtils {
      * @return 返回一个 Base64 图片文件编码器对象
      */
     public static Base64ImageFileEncoder base64ImageFileEncoder(String url) {
-        String type = url.substring(url.lastIndexOf(".") + 1);
+        String type = substringLastSeparator(url, ".");
         if (type.length() > 3) {
             type = null;
         }
@@ -148,8 +155,7 @@ public final class FileUtils {
      * @return 返回一个 Base64 图片文件编码器对象
      */
     public static Base64ImageFileEncoder base64ImageFileEncoder(File src) {
-        String filename = src.getName();
-        String type = filename.substring(filename.lastIndexOf(".") + 1);
+        String type = substringLastSeparator(src.getName(), ".");
         try {
             return new Base64ImageFileEncoder(new FileInputStream(src)).setType(type);
         } catch (FileNotFoundException e) {
@@ -165,6 +171,41 @@ public final class FileUtils {
      */
     public static Base64ImageFileEncoder base64ImageFileEncoder(InputStream in) {
         return new Base64ImageFileEncoder(in);
+    }
+
+    /**
+     * 转换文件大小单位
+     *
+     * @param size 文件大小, 单位(B)
+     * @return 返回换算后的大小单位, eg: "2M" or "2KB"
+     */
+    public static String transformFileUnit(long size) {
+        int index = 0;
+        while (size / 1024 > 0 && index < FILE_SIZE_UNIT.length) {
+            size = Math.round(size / 1024);
+            index++;
+        }
+        return size + FILE_SIZE_UNIT[index];
+    }
+
+    /**
+     * SpringMVC 文件上传
+     *
+     * @param file 文件对象
+     * @return 返回一个SpringMVC 文件上传对象
+     */
+    public static SpringMVCFileUpload upload(MultipartFile file) {
+        return new SpringMVCFileUpload(new MultipartFile[]{file});
+    }
+
+    /**
+     * SpringMVC 文件上传
+     *
+     * @param files 文件对象数组
+     * @return 返回一个SpringMVC 文件上传对象
+     */
+    public static SpringMVCFileUpload upload(MultipartFile[] files) {
+        return new SpringMVCFileUpload(files);
     }
 
     /**
@@ -335,7 +376,7 @@ public final class FileUtils {
         // 私有构造
         private UrlStream(String url) {
             this.conn = createHttpURLConnection(url);
-            this.fileName = url.substring(url.lastIndexOf("/") + 1);
+            this.fileName = substringLastSeparator(url, "/");
         }
 
         /**
@@ -536,7 +577,7 @@ public final class FileUtils {
                 byte[] data = new byte[index];
                 System.arraycopy(buffer, 0, data, 0, index);
                 String content = new String(base64Encode(data));
-                if (type == null || type.equalsIgnoreCase("jpg")) {
+                if (type == null || type.length() == 0 || type.equalsIgnoreCase("jpg")) {
                     type = "jpeg";
                 } else if (type.equalsIgnoreCase("ico")) {
                     type = "x-icon";
@@ -556,6 +597,339 @@ public final class FileUtils {
             }
         }
 
+    }
+
+    /**
+     * SpringMVC 文件上传
+     */
+    public static final class SpringMVCFileUpload {
+
+        // SpringMVC 文件对象数组
+        private MultipartFile[] files;
+
+        // 允许文件上传的最小大小
+        private long minSize;
+
+        // 允许文件上传的最大大小
+        private long maxSize;
+
+        // 允许文件上传的类型
+        private List<String> filters;
+
+        // 文件大小限制提示信息
+        private String limitTips;
+
+        // 文件类型限制提示信息
+        private String filterTips;
+
+        // 文件类型适配功能
+        private BiFunction<InputStream, File, Boolean> typeAdapter;
+
+        // 文件大小适配功能
+        private BiFunction<InputStream, File, Boolean> sizeAdapter;
+
+        // 私有化
+        private SpringMVCFileUpload(MultipartFile[] files) {
+            this.files = files;
+        }
+
+        /**
+         * 设置文件上传的大小限制
+         *
+         * @param minSize 最小大小, 单位(B), 默认为0, 表示不限制
+         * @param maxSize 最大大小, 单位(B), 默认为0, 表示不限制
+         * @return
+         */
+        public SpringMVCFileUpload limit(long minSize, long maxSize) {
+            this.minSize = minSize;
+            this.maxSize = maxSize;
+            this.limitTips = "请上传 ";
+            if (maxSize != 0 && minSize == 0) {
+                minSize = 1;
+            }
+            if (minSize != 0 && maxSize != 0) {
+                this.limitTips += transformFileUnit(minSize);
+                this.limitTips += " ~ ";
+                this.limitTips += transformFileUnit(maxSize);
+                this.limitTips += " 的文件";
+            }
+            return this;
+        }
+
+        /**
+         * 设置文件上传的允许的类型
+         *
+         * @param extension 文件扩展名, 默认为空, 表示不限制, eg: "jpg", "png", 表示只允许 jpg 和 png 类型的文件上传
+         * @return
+         */
+        public SpringMVCFileUpload filter(String... extension) {
+            this.filters = Arrays.asList(extension);
+            this.filterTips = Arrays.toString(extension);
+            this.filterTips = filterTips.substring(1, filterTips.length() - 1);
+            return this;
+        }
+
+        /**
+         * 设置文件类型适配功能
+         *
+         * @param typeAdapter 文件类型适配功能, 当上传的文件类型不符合时, 可通过此适配器转换并手工完成上传,
+         *                    参数：(InputStream, File), File 为未存储的文件对象, 文件名不可修改, 否则
+         *                    上传后工具类找不到文件位置, 可以通过 renameTo 来修改文件扩展名, 以完成文件
+         *                    类型转换。转换成功时需返回true, 失败返回false.
+         * @return
+         */
+        public SpringMVCFileUpload setTypeAdapter(BiFunction<InputStream, File, Boolean> typeAdapter) {
+            this.typeAdapter = typeAdapter;
+            return this;
+        }
+
+        /**
+         * 设置文件大小适配功能
+         *
+         * @param sizeAdapter 文件大小适配功能, 当上传的文件大小不符合时, 可通过此适配器转换并手工完成上传,
+         *                    参数：(InputStream, File), File 为未存储的文件对象, 文件名不可修改, 否则
+         *                    上传后工具类找不到文件位置。转换成功时需返回true, 失败返回false.
+         * @return
+         */
+        public SpringMVCFileUpload setSizeAdapter(BiFunction<InputStream, File, Boolean> sizeAdapter) {
+            this.sizeAdapter = sizeAdapter;
+            return this;
+        }
+
+        /**
+         * 执行文件上传
+         *
+         * @return 返回一个文件上传的报告对象
+         */
+        public FileUploadReport execute() {
+            FileUploadReport report = new FileUploadReport();
+            Arrays.stream(files).filter(f -> f != null && !f.isEmpty()).forEach(file -> {
+                String fileName = file.getOriginalFilename();
+                String extension = substringLastSeparator(fileName, ".");
+                if (filters == null || (filters != null && filters.contains(extension))) {
+                    long fileSize = file.getSize();
+                    String overLimit = null;
+                    if (minSize != 0 && fileSize < minSize) {
+                        overLimit = "太小";
+                    } else if (maxSize != 0 && fileSize > maxSize) {
+                        overLimit = "太大";
+                    }
+                    if (overLimit != null) {
+                        if (sizeAdapter != null) {
+                            adaptFile(report, file, fileName, extension, sizeAdapter);
+                        } else {
+                            report.addFailItem("文件 \"" + fileName + "\" " + overLimit + ", 不符合上传标准, " + limitTips);
+                        }
+                        return;
+                    }
+                    LocalFile localFile = LocalFileUpload.createLocalFile(extension);
+                    try {
+                        file.transferTo(localFile.file);
+                        report.addSuccessItem(localFile.key);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        report.addFailItem("文件 \"" + fileName + "\" " + overLimit + ", 上传失败, 请重新选择上传");
+                    }
+                } else {
+                    if (typeAdapter != null) {
+                        adaptFile(report, file, fileName, extension, typeAdapter);
+                    } else {
+                        report.addFailItem("文件 \"" + fileName + "\" 是不支持上传的类型, 请选择 " + filterTips + " 类型的文件");
+                    }
+                }
+            });
+            return report;
+        }
+
+        // 适配文件
+        private void adaptFile(FileUploadReport report, MultipartFile file, String fileName, String extension, BiFunction<InputStream, File, Boolean> adapter) {
+            LocalFile localFile = LocalFileUpload.createLocalFile(extension);
+            try {
+                Boolean adapterResult = adapter.apply(file.getInputStream(), localFile.file);
+                if (adapterResult != null && adapterResult) {
+                    report.addSuccessItem(localFile.key);
+                } else {
+                    report.addFailItem("文件 \"" + fileName + "\" 上传失败, 请重新选择上传");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                report.addFailItem("文件 \"" + fileName + "\" 上传失败, 请重新选择上传");
+            }
+        }
+
+    }
+
+    /**
+     * 本地文件上传, 可在 Spring 中使用 bean 配置选项：
+     *
+     * <bean class="org.fanlychie.util.FileUtils.LocalFileUpload" p:storageRootFolder="/pathname/" p:childFolderLength="2" />
+     */
+    public static final class LocalFileUpload {
+
+        // 上传的文件存储的根目录
+        private static String storageRootFolder = System.getProperty("java.io.tmpdir");
+
+        // 上传的文件存储的子目录长度
+        private static int childFolderLength = 5;
+
+        /**
+         * 设置上传的文件存储的根目录
+         *
+         * @param storageRootFolder 上传的文件存储的根目录, 默认使用 Java IO 临时目录
+         */
+        public void setStorageRootFolder(String storageRootFolder) {
+            LocalFileUpload.storageRootFolder = storageRootFolder;
+        }
+
+        /**
+         * 设置上传的文件存储的子目录长度
+         *
+         * @param childFolderLength 上传的文件存储的子目录长度, 默认长度为 5
+         */
+        public void setChildFolderLength(int childFolderLength) {
+            LocalFileUpload.childFolderLength = childFolderLength;
+        }
+
+        /**
+         * 创建本地文件
+         *
+         * @param extension 文件扩展名
+         * @return 返回一个本地文件对象
+         */
+        private static LocalFile createLocalFile(String extension) {
+            if (extension == null) {
+                extension = "";
+            } else {
+                extension = "." + extension;
+            }
+            String uuidStr = UUID.randomUUID().toString().replace("-", "");
+            String fileName = uuidStr + extension;
+            String childFolderName = fileName.substring(0, childFolderLength);
+            File childFoloder = new File(storageRootFolder + "/" + childFolderName);
+            if (!childFoloder.exists()) {
+                childFoloder.mkdirs();
+            }
+            return new LocalFile(uuidStr, new File(childFoloder, fileName));
+        }
+
+    }
+
+    /**
+     * 文件上传报告
+     */
+    public static final class FileUploadReport {
+
+        // 失败个数
+        private int failNum;
+
+        // 成功个数
+        private int successNum;
+
+        // 成功的文件 Key 列表
+        private List<String> fileKeys;
+
+        // 失败的文件消息列表
+        private List<String> failMsgs;
+
+        // 私有化
+        private FileUploadReport() {
+            this.fileKeys = new ArrayList<>();
+            this.failMsgs = new ArrayList<>();
+        }
+
+        /**
+         * 获取失败的文件个数
+         *
+         * @return 返回失败的文件个数
+         */
+        public int getFailNum() {
+            return failNum;
+        }
+
+        /**
+         * 获取成功的文件个数
+         *
+         * @return 返回成功的文件个数
+         */
+        public int getSuccessNum() {
+            return successNum;
+        }
+
+        /**
+         * 获取成功的文件 Key 列表
+         *
+         * @return 返回成功的文件 Key 列表
+         */
+        public List<String> getFileKeys() {
+            return fileKeys;
+        }
+
+        /**
+         * 获取失败的文件消息列表
+         *
+         * @return 返回失败的文件消息列表
+         */
+        public List<String> getFailMsgs() {
+            return failMsgs;
+        }
+
+        /**
+         * 报告是否健康的, 若是, 表明上传全部成功, 否则表明存在上传失败的文件
+         *
+         * @return true/false
+         */
+        public boolean isHealthy() {
+            return failNum == 0;
+        }
+
+        private void addSuccessItem(String fileKey) {
+            this.successNum++;
+            this.fileKeys.add(fileKey);
+        }
+
+        private void addFailItem(String failMsg) {
+            this.failNum++;
+            this.failMsgs.add(failMsg);
+        }
+
+    }
+
+    /**
+     * 本地文件
+     */
+    private static final class LocalFile {
+
+        /**
+         * 文件Key
+         */
+        private String key;
+
+        // 文件对象
+        private File file;
+
+        private LocalFile(String key, File file) {
+            this.key = key;
+            this.file = file;
+        }
+
+    }
+
+    /**
+     * 在源字符串中切割给定的分隔符最后出现的位置起剩余的字符串
+     *
+     * @param source 源字符串
+     * @param separator 分隔符
+     * @return
+     */
+    private static String substringLastSeparator(String source, String separator) {
+        if (source == null || separator == null) {
+            return "";
+        }
+        int index = source.lastIndexOf(separator);
+        if (index == -1) {
+            return "";
+        }
+        return source.substring(index + 1);
     }
 
     /**
