@@ -1,5 +1,6 @@
 package org.fanlychie.util;
 
+import javax.servlet.http.HttpServletRequest;
 import java.io.*;
 
 /**
@@ -48,5 +49,24 @@ public final class PathUtils {
         return new BufferedReader(new InputStreamReader(getClassPathStream(pathname)));
     }
 
+    /**
+     * 获取项目的路径
+     *
+     * @param request HttpServletRequest
+     * @return 返回项目的绝对路径
+     */
+    public static String getProjectPath(HttpServletRequest request) {
+        return request.getSession().getServletContext().getRealPath("/");
+    }
+
+    /**
+     * 获取项目 WEB-INF 的路径
+     *
+     * @param request HttpServletRequest
+     * @return 返回项目 WEB-INF 的绝对路径
+     */
+    public static String getWebInfPath(HttpServletRequest request) {
+        return getProjectPath(request) + "WEB-INF/";
+    }
 
 }
