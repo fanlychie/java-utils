@@ -50,6 +50,16 @@ public final class PathUtils {
     }
 
     /**
+     * 获取服务的路径
+     *
+     * @param request HttpServletRequest
+     * @return 返回获取服务的绝对路径
+     */
+    public static String getServerPath(HttpServletRequest request) {
+        return request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath() + "/";
+    }
+
+    /**
      * 获取项目的路径
      *
      * @param request HttpServletRequest
