@@ -1,5 +1,8 @@
 package org.fanlychie.util;
 
+import com.itextpdf.text.Document;
+import com.itextpdf.text.pdf.PdfWriter;
+import com.itextpdf.tool.xml.XMLWorkerHelper;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
@@ -234,6 +237,16 @@ public final class FileUtils {
     }
 
     /**
+     * 解析 HTML 内容成 PDF 文档
+     *
+     * @param content HTML 内容
+     * @return 返回 PDF - HTML 转换器对象
+     */
+    public static PDFHtmlConvertor parseHtml2PDF(String content) {
+        return new PDFHtmlConvertor(content);
+    }
+
+    /**
      * 可写的流
      *
      * @author fanlychie
@@ -316,18 +329,29 @@ public final class FileUtils {
         /**
          * 写出到客户端以供客户端下载此文件, 兼容中文字符
          *
-         * @param response HttpServletResponse
-         * @param filename 客户端下载文件的名称
+         * @param response         HttpServletResponse
+         * @param downloadFileName 客户端下载文件的名称
          */
-        public void to(HttpServletResponse response, String filename) {
+        public void to(HttpServletResponse response, String downloadFileName) {
             try (OutputStream out = response.getOutputStream()) {
-                filename = new String(filename.getBytes("UTF-8"), "ISO-8859-1");
-                response.setContentType("application/octet-stream; charset=iso-8859-1");
-                response.setHeader("Content-Disposition", "attachment; filename=" + filename);
+                initBrowserDownload(response, downloadFileName);
                 this.to(out);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+        }
+
+        /**
+         * 初始化浏览器下载相关配置
+         *
+         * @param response HttpServletResponse
+         * @param filename 下载显示的文件名
+         * @throws IOException
+         */
+        private static void initBrowserDownload(HttpServletResponse response, String filename) throws IOException {
+            filename = new String(filename.getBytes("UTF-8"), "ISO-8859-1");
+            response.setContentType("application/octet-stream; charset=iso-8859-1");
+            response.setHeader("Content-Disposition", "attachment; filename=" + filename);
         }
 
     }
@@ -1198,6 +1222,81 @@ public final class FileUtils {
         private void addFailItem(String failMsg) {
             this.failNum++;
             this.failMsgs.add(failMsg);
+        }
+
+    }
+
+    /**
+     * PDF-HTML 转换器
+     */
+    public static final class PDFHtmlConvertor {
+
+        // HTML 内容
+        private String content;
+
+        // 私有化
+        private PDFHtmlConvertor(String content) {
+            this.content = content;
+        }
+
+        /**
+         * 生成到文件
+         *
+         * @param file PDF 文件对象
+         */
+        public void to(File file) {
+            try (OutputStream os = new FileOutputStream(file)) {
+                execute(os);
+            } catch (Throwable e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * 生成到本地文件存储
+         *
+         * @return 返回本地文件存储的文件 Key 值
+         */
+        public String toLocalFile() {
+            LocalFile localFile = LocalFileUpload.createLocalFile("pdf");
+            to(localFile.file);
+            return localFile.key;
+        }
+
+        /**
+         * 生成到客户端浏览器下载
+         *
+         * @param response         HttpServletResponse
+         * @param downloadFileName 下载显示的文件名称
+         */
+        public void to(HttpServletResponse response, String downloadFileName) {
+            try (OutputStream out = response.getOutputStream()) {
+                WritableStream.initBrowserDownload(response, downloadFileName);
+                execute(out);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /**
+         * 执行生成
+         *
+         * @param os 输出流对象
+         */
+        private void execute(OutputStream os) {
+            Document document = new Document();
+            try {
+                PdfWriter writer = PdfWriter.getInstance(document, os);
+                document.open();
+                Reader reader = new BufferedReader(new StringReader(content));
+                XMLWorkerHelper.getInstance().parseXHtml(writer, document, reader);
+            } catch (Throwable e) {
+                throw new RuntimeException(e);
+            } finally {
+                if (document != null) {
+                    document.close();
+                }
+            }
         }
 
     }
