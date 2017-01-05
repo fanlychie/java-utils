@@ -237,6 +237,16 @@ public final class FileUtils {
     }
 
     /**
+     * 获取本地上传的文件
+     *
+     * @param fileKey 文件上传时返回的文件 Key
+     * @return 返回文件对象
+     */
+    public static File getLocalFile(String fileKey) {
+        return LocalFileUpload.achieveLocalFile(fileKey);
+    }
+
+    /**
      * 解析 HTML 内容成 PDF 文档
      *
      * @param content HTML 内容
