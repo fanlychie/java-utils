@@ -1265,12 +1265,12 @@ public final class FileUtils {
         /**
          * 生成到本地文件存储
          *
-         * @return 返回本地文件存储的文件 Key 值
+         * @return 返回本地文件存储对象
          */
-        public String toLocalFile() {
+        public LocalFile toLocalFile() {
             LocalFile localFile = LocalFileUpload.createLocalFile("pdf");
             to(localFile.file);
-            return localFile.key;
+            return localFile;
         }
 
         /**
@@ -1314,11 +1314,9 @@ public final class FileUtils {
     /**
      * 本地文件
      */
-    private static final class LocalFile {
+    public static final class LocalFile {
 
-        /**
-         * 文件Key
-         */
+        // 文件 Key
         private String key;
 
         // 文件对象
@@ -1327,6 +1325,19 @@ public final class FileUtils {
         private LocalFile(String key, File file) {
             this.key = key;
             this.file = file;
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public File getFile() {
+            return file;
+        }
+
+        @Override
+        public String toString() {
+            return "LocalFile{" + "key='" + key + '\'' + ", file=" + file + '}';
         }
 
     }
