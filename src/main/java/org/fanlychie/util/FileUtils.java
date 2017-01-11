@@ -1146,9 +1146,11 @@ public final class FileUtils {
         private static File achieveLocalFile(String fileKey) {
             String childFolderName = fileKey.substring(0, childFolderLength);
             File childFoloder = new File(storageRootFolder + "/" + childFolderName);
-            for (File file : childFoloder.listFiles()) {
-                if (file.getName().startsWith(fileKey)) {
-                    return file;
+            if (childFoloder.isDirectory()) {
+                for (File file : childFoloder.listFiles()) {
+                    if (file.getName().startsWith(fileKey)) {
+                        return file;
+                    }
                 }
             }
             return null;
